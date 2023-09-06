@@ -1,10 +1,14 @@
 package oneresponse
 
 import (
+	"context"
 	"errors"
 	"fmt"
+	"math/rand"
 	"testing"
+	"time"
 
+	"github.com/rs/zerolog/log"
 	_ "github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -14,13 +18,23 @@ var (
 	err3 = errors.New("another error")
 )
 
-func successBoolFunc1() (bool, error) {
+var randomSeed = rand.New(rand.NewSource(time.Now().UnixNano()))
+
+func successBoolFunc1(ctx context.Context) (bool, error) {
+	select {
+	case <-ctx.Done():
+		log.Error().Msg("context done")
+		return false, ctx.Err()
+	case <-time.After(time.Duration(randomSeed.Int31n(100)) * time.Millisecond):
+		log.Info().Msg("returning true")
+		break
+	}
 	return true, nil
 }
-func failingBoolFunc1() (bool, error) {
+func failingBoolFunc1(_ context.Context) (bool, error) {
 	return false, err2
 }
-func failingBoolFunc2() (bool, error) {
+func failingBoolFunc2(_ context.Context) (bool, error) {
 	return false, err3
 }
 
@@ -56,7 +70,8 @@ func TestOneResponseSerial(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got, err := Serial(tt.args.operation)
+			ctx := context.Background()
+			got, err := Serial(ctx, tt.args.operation)
 			if tt.wantErr {
 				require.Error(t, err, fmt.Sprintf("Serial(%v)", tt.args.operation))
 			}
@@ -85,7 +100,12 @@ func TestOneResponseParallel(t *testing.T) {
 		{
 			name: "bool",
 			args: args[bool]{
-				operation: []OperationWithData[bool]{failingBoolFunc1, successBoolFunc1},
+				operation: []OperationWithData[bool]{
+					failingBoolFunc1,
+					successBoolFunc1,
+					successBoolFunc1,
+					successBoolFunc1,
+				},
 			},
 			want:    true,
 			wantErr: false,
@@ -102,7 +122,8 @@ func TestOneResponseParallel(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got, err := Parallel(tt.args.operation)
+			ctx := context.Background()
+			got, err := Parallel(ctx, tt.args.operation)
 			if tt.wantErr {
 				require.Error(t, err, fmt.Sprintf("Parallel(%v)", tt.args.operation))
 			}
