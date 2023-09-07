@@ -35,12 +35,12 @@ func Parallel[T any](ctx context.Context, operation []OperationWithData[T]) (T, 
 	var errs []error
 	var result T
 	var success atomic.Bool
-	resCh := make(chan T, len(operation))
-	errCh := make(chan error, len(operation))
+	resCh := make(chan T)
+	errCh := make(chan error)
 	subCtx, cancel := context.WithCancel(ctx)
 	defer cancel()
 	for i := range operation {
-		go func(index int, o OperationWithData[T]) {
+		go func(o OperationWithData[T]) {
 			res, err := o(subCtx)
 			if err != nil {
 				errCh <- err
@@ -48,7 +48,7 @@ func Parallel[T any](ctx context.Context, operation []OperationWithData[T]) (T, 
 			}
 			success.Store(true)
 			resCh <- res
-		}(i, operation[i])
+		}(operation[i])
 	}
 consumeLoop:
 	for {
