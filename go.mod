@@ -1,6 +1,6 @@
 module github.com/paullesiak/go-oneresponse
 
-go 1.21.0
+go 1.22.2
 
 require (
 	github.com/rs/zerolog v1.30.0
