@@ -4,12 +4,11 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"log/slog"
 	"math/rand"
 	"testing"
 	"time"
 
-	"github.com/rs/zerolog/log"
-	_ "github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
 
@@ -23,10 +22,10 @@ var randomSeed = rand.New(rand.NewSource(time.Now().UnixNano()))
 func successBoolFunc1(ctx context.Context) (bool, error) {
 	select {
 	case <-ctx.Done():
-		log.Error().Msg("context done")
+		slog.Error("context done")
 		return false, ctx.Err()
 	case <-time.After(time.Duration(randomSeed.Int31n(100)) * time.Millisecond):
-		log.Info().Msg("returning true")
+		slog.Info("returning true")
 		break
 	}
 	return true, nil
@@ -85,6 +84,13 @@ func TestOneResponseSerial(t *testing.T) {
 	}
 }
 
+func TestOneResponseSerialEmpty(t *testing.T) {
+	ctx := context.Background()
+	got, err := Serial[bool](ctx, nil)
+	require.Zero(t, got)
+	require.ErrorIs(t, err, ErrNoOperations)
+}
+
 func TestOneResponseParallel(t *testing.T) {
 	type args[T any] struct {
 		operation []OperationWithData[T]
@@ -135,4 +141,11 @@ func TestOneResponseParallel(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestOneResponseParallelEmpty(t *testing.T) {
+	ctx := context.Background()
+	got, err := Parallel[bool](ctx, nil)
+	require.Zero(t, got)
+	require.ErrorIs(t, err, ErrNoOperations)
 }
