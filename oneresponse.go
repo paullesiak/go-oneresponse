@@ -14,11 +14,9 @@ type OperationWithData[T any] func(context.Context) (T, error)
 func Serial[T any](ctx context.Context, operation []OperationWithData[T]) (T, error) {
 	var errs []error
 	var res T
-	subCtx, cancel := context.WithCancel(ctx)
-	defer cancel()
 	for _, op := range operation {
 		var err error
-		res, err = op(subCtx)
+		res, err = op(ctx)
 		if err != nil {
 			errs = append(errs, err)
 			continue
@@ -35,8 +33,8 @@ func Parallel[T any](ctx context.Context, operation []OperationWithData[T]) (T, 
 	var errs []error
 	var result T
 	var success atomic.Bool
-	resCh := make(chan T)
-	errCh := make(chan error)
+	resCh := make(chan T, len(operation))
+	errCh := make(chan error, len(operation))
 	subCtx, cancel := context.WithCancel(ctx)
 	defer cancel()
 	for i := range operation {
@@ -46,25 +44,19 @@ func Parallel[T any](ctx context.Context, operation []OperationWithData[T]) (T, 
 				errCh <- err
 				return
 			}
-			success.Store(true)
-			resCh <- res
+			// atomically check and set the success flag to ensure only the first successful operation sends its result.
+			if success.CompareAndSwap(false, true) {
+				resCh <- res
+			}
 		}(operation[i])
 	}
-consumeLoop:
-	for {
+	for i := 0; i < len(operation); i++ {
 		select {
 		case result = <-resCh:
-			cancel()
-			break consumeLoop
+			return result, nil
 		case err := <-errCh:
 			errs = append(errs, err)
-			if len(errs) == len(operation) {
-				break consumeLoop
-			}
 		}
-	}
-	if success.Load() {
-		return result, nil
 	}
 	return result, errors.Join(errs...)
 }
