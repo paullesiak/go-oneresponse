@@ -84,6 +84,13 @@ func TestOneResponseSerial(t *testing.T) {
 	}
 }
 
+func TestOneResponseSerialEmpty(t *testing.T) {
+	ctx := context.Background()
+	got, err := Serial[bool](ctx, nil)
+	require.Zero(t, got)
+	require.ErrorIs(t, err, ErrNoOperations)
+}
+
 func TestOneResponseParallel(t *testing.T) {
 	type args[T any] struct {
 		operation []OperationWithData[T]
@@ -134,4 +141,11 @@ func TestOneResponseParallel(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestOneResponseParallelEmpty(t *testing.T) {
+	ctx := context.Background()
+	got, err := Parallel[bool](ctx, nil)
+	require.Zero(t, got)
+	require.ErrorIs(t, err, ErrNoOperations)
 }
